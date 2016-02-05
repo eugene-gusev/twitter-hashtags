@@ -1,0 +1,133 @@
+doctype html
+html
+  head
+    title Хэштеги
+    meta(name='viewport', content='width=device-width')
+    meta(charset='utf-8')
+    meta(http-equiv="X-UA-Compatible" content="IE=edge")
+    script(src='javascripts/jquery.js')
+    link(rel="stylesheet", href="/stylesheets/bootstrap.min.css")
+    link(rel='stylesheet', href='/stylesheets/style.css')
+    link(href="stylesheets/bootstrap-theme.min.css", rel="stylesheet")
+    link(href="stylesheets/jquery-ui.css", rel="stylesheet")
+    script(src='javascripts/jquery-ui.js')
+    script.
+      var usedperiod=1;
+      var period = 1;
+      var skip=15;
+      var min=0;
+
+      function choosePeriod (id) {
+        if ($('#'+id+"day").hasClass("active")==false) {
+          var ids = [1,3,7];
+          ids.forEach(function (elem,i) {
+            if (elem==id) {
+              $('#'+elem+"day").addClass('active');
+              period = i;
+            }
+            else {
+              $('#'+elem+"day").removeClass('active');
+            }
+          });
+        }
+      }
+
+      function apply () {
+        var limit = parseInt($("#limit").val());
+        if ($.isNumeric(limit) && limit>=0) {
+          min=limit;
+        }
+        else {
+          min=0;
+        }
+        skip=0;
+        usedperiod=period;
+        $("#tbody").empty();
+        $("#load").show();
+        loadTable();
+      }
+
+      function loadTable() {
+        $.get('http://localhost:2000/show/'+usedperiod+'/'+skip+'/'+min, {}, function(json){
+          skip+=json.list.length;
+          if (json.list.length<15) {
+            $("#load").hide();
+          }
+          json.list.forEach(function (doc) {
+            $("#tbody").append("<tr><td>" + doc._id.slice(9,-1) +
+                              "</td><td>" + doc.hits_0 +
+                              "</td><td>" + doc.hits_1 +
+                              "</td><td>" + doc.hits_2 + "</td></tr>");
+          })
+        });
+      }
+
+      function findHashtag() {
+         if ($("#autocomplete").val().search(/[^а-яА-ЯёЁa-zA-Z0-9_]/) == -1) {
+           $.get('http://localhost:2000/find/'+$("#autocomplete").val().toLocaleLowerCase(), {}, function(json){
+             $("#tbody").empty();
+             $("#load").hide();
+             if (json.mes != "error") {
+               $("#tbody").append("<tr><td>" + json.mes._id.slice(9,-1) +
+                       "</td><td>" + json.mes.hits_0 +
+                       "</td><td>" + json.mes.hits_1 +
+                       "</td><td>" + json.mes.hits_2 + "</td></tr>");
+             }
+             else {
+               $("#tbody").append("<tr><td>Не найдено</td></tr>");
+             }
+           });
+         }
+      }
+
+      $(document).ready(function () {
+        $("#autocomplete").autocomplete({
+          source: function (request, response) {
+            if ($("#autocomplete").val().search(/[^а-яА-ЯёЁa-zA-Z0-9_]/) == -1) {
+              $.get('http://localhost:2000/autocomplete/' + $("#autocomplete").val().toLocaleLowerCase(), {}, function (json) {
+                response(json.list);
+              });
+            }
+          },
+          minLength: 3
+        });
+      });
+  body
+    block content
+      h1 Статистика использования хэштегов
+      div.row
+        div.col-md-3.text-center
+          div.form-horizontal
+            p Период:
+            div(role="group").btn-group
+              button#1day(onclick='choosePeriod(1)').btn.btn-default 1 день
+              button#3day(onclick='choosePeriod(3)').btn.btn-default.active 3 дня
+              button#7day(onclick='choosePeriod(7)').btn.btn-default 7 дней
+            input#limit.form-control(placeholder="Минимум упоминаний")
+            button(onclick="apply()").btn.btn-default Применить
+          p.vertical-center Или
+          p Показать информацию о хэштеге:
+          div.form-inline
+            div.input-group
+              span.input-group-addon #
+              input#autocomplete.form-control
+            button(onclick="findHashtag()").btn.btn-default
+              i.glyphicon.glyphicon-search
+        div.col-md-9
+          table.table.table-striped
+            thead
+              tr
+                th Хэштег
+                th 1 день
+                th 3 дня
+                th 7 дней
+            tbody#tbody
+              - list.forEach(function (doc) {
+                  tr
+                    td=doc._id.slice(9,-1)
+                    td=doc.hits_0
+                    td=doc.hits_1
+                    td=doc.hits_2
+              -});
+          div.text-center
+            button#load(onclick="loadTable()").btn.btn-default Ещё
