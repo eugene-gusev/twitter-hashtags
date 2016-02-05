@@ -7,10 +7,10 @@ config.twitter = {};
 config.mongo = {};
 config.filters = {};
 
-config.twitter.consumer_key = '45iTZLa10cdi0fZ7NESVCy0sX';
-config.twitter.consumer_secret = 'MBg2ndN0NvUyP5VDS5uJsCQ0jvayYzTBugZbwMP537zKY792s6';
-config.twitter.access_token_key = '485027767-YLctmuM3ROlKXkeRBuF9x3tBhZoo17KRWJNs4OEI';
-config.twitter.access_token_secret = 'MCeU7KKhbAbb8ChBQaEzH54iWWeoad2RbGKM0CyqsZpXy';
+config.twitter.consumer_key = '4...X';
+config.twitter.consumer_secret = 'M...6';
+config.twitter.access_token_key = '4...I';
+config.twitter.access_token_secret = 'M...y';
 
 config.mongo.url = "mongodb://localhost:27017/twitter";
 
