@@ -42,23 +42,17 @@ function parse (db) {
                     console.log("parsed    / " + dat.toLocaleString());
 
                     db.collection('tweets_0').insert(temp, function (err, result) {
-                        if (err) {
-                            console.log(err);
-                        }
-                    });
+                        if (err) console.log(err);
 
-                    unparsed.remove({},function(err, removed){
-                        if (err) {
-                            console.log(err);
-                        }
-                    });
+                        unparsed.remove({},function(err, removed){
+                            if (err) console.log(err);
 
-                    hashs_global.forEach(function (hashtag) {
-                        db.collection('hashtags').update({_id: "ObjectId("+hashtag+")"},
-                            {$inc: {hits_0: 1, hits_1: 1, hits_2:1}}, {upsert:true,safe:false}, function (err, result) {
-                            if (err) {
-                                console.log(err);
-                            }
+                            hashs_global.forEach(function (hashtag) {
+                                db.collection('hashtags').update({_id: "ObjectId("+hashtag+")"},
+                                    {$inc: {hits_0: 1, hits_1: 1, hits_2:1}}, {upsert:true,safe:false}, function (err, result) {
+                                        if (err)    console.log(err);
+                                    });
+                            });
                         });
                     });
                 }

@@ -6,6 +6,17 @@ var app = express();
 var parser = require("./hashtag_parser");
 var config = require("./config");
 var clean = require("./oldTweetsRemover");
+var async = require("async");
+
+var items = [function (db) {
+    db.collection("unparsed").insert(temp, function (err, result) {
+            if (err) {
+                console.log(err);
+            }
+            temp = [];
+        });
+    },
+    parser, clean];
 
 var mongodb = require('mongodb');
 var mongo;  //для передачи клиенту
@@ -29,21 +40,11 @@ app.use(express.static(__dirname + '/public'));
 
 //отображение начальной страницы
 app.get('/', function(req, res) {
-    var arr = [],counter=0;
-
     var curs = mongo.collection('hashtags').find({}).sort({"hits_1": -1}).limit(15);
 
-    curs.each(function (err, doc) {
-        if (err) console.log(err);
-        if (doc!==null) {
-            arr.push(doc);
-            counter++;
-            if (counter==15) {
-                res.render('index.jade', {list : arr});
-            }
-        }
+    curs.toArray(function (err, result) {
+        res.render('index.jade', {list : result});
     });
-
 });
 
 //вывод 5 подсказок
@@ -76,23 +77,16 @@ app.get('/show/:period/:skip/:min', function(req, res) {
     var limit = parseInt(req.params.min);
     var period = req.params.period;
     var fnd = [{hits_0: {$gte: limit}}, {hits_1: {$gte: limit}}, {hits_2: {$gte: limit}}];
-    var arr = [],counter= 0, dbsize;
 
     var curs = mongo.collection('hashtags').find(fnd[period]).sort(
         srt[period]).limit(15).skip(parseInt(req.params.skip));
 
-    curs.count(function(error, size) {
-        dbsize=size;
-    });
-
-    curs.each(function (err, doc) {
-        if (err) console.log(err);
-        if (doc!==null) {
-            arr.push(doc);
-            counter++;
-            if (counter==dbsize) {
-                res.send({list : arr});
-            }
+    curs.toArray(function (err, result) {
+        if (result.length==0) {
+            res.send({mes:"error"});
+        }
+        else {
+            res.send({list : result});
         }
     });
 });
@@ -101,20 +95,17 @@ app.get('/show/:period/:skip/:min', function(req, res) {
 app.get('/find/:hashtag', function (req,res) {
     var curs = mongo.collection('hashtags').find({_id : "ObjectId(" + req.params.hashtag + ")"});
 
-    curs.count(function(error, size) {
-        if (size==0) {
+    curs.toArray(function (err, result) {
+        if (result.length==0) {
             res.send({mes:"error"});
         }
         else {
-            curs.each(function (err, doc) {
-                if (err) console.log(err);
-                if (doc!==null) {
-                    res.send({mes : doc});
-                }
-            });
+            res.send({mes : result[0]});
         }
     });
 });
+
+var temp = [];
 
 app.listen(2000);
 
@@ -124,21 +115,39 @@ MongoClient.connect(url, function (err, db) {
     } else {
         console.log('Connection established to', url);
         mongo = db;
+        //clean(db,0);
+       // parser(db);
         setInterval(function () {
-            parser(db); //найти хэштеги в свежих твитах
-            clean(db);  //найти устаревшие твиты и обновить инф. о тегах
+            async.each(items, function (item) {
+                item(db, 0);
+            });
+           /* items.forEach(function (item) {
+                item(db);
+            });*/
+           /* db.collection("unparsed").insert(temp, function (err, result) {
+                if (err) {
+                    console.log(err);
+                }
+                temp = [];
+                parser(db);
+            });*/
+
+
+          //  parser(db); //найти хэштеги в свежих твитах
+           // clean(db);  //найти устаревшие твиты и обновить инф. о тегах
         }, 300000);
 
-        var collection = db.collection('unparsed');
+       // var collection = db.collection('unparsed');
 
         twit.stream('statuses/sample', function(stream) {
             stream.on('data', function (data) {
                 if( (/[а-яА-ЯёЁ]/.test(data.text)) && (/#\S/.test(data.text))) {
-                    collection.insert({date: parseInt(data.timestamp_ms), text: data.text}, function (err, result) {
+                 /*   collection.insert({date: parseInt(data.timestamp_ms), text: data.text}, function (err, result) {
                         if (err) {
                             console.log(err);
                         }
-                    });
+                    });*/
+                    temp.push({date: parseInt(data.timestamp_ms), text: data.text});
                 }
             });
 
