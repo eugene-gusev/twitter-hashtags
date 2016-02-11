@@ -12,8 +12,8 @@ html
     link(href="stylesheets/jquery-ui.css", rel="stylesheet")
     script(src='javascripts/jquery-ui.js')
     script.
-      var usedperiod=0;
-      var period = 0;
+      var usedperiod;
+      var period;
       var skip=15;
       var min=0;
 
@@ -21,7 +21,10 @@ html
       function setKeys () {
           var temp = !{JSON.stringify(list)};
           for (var key in temp[0]['value']) {
-              keys.push(key);
+            if (key.toString() == !{JSON.stringify(def)}) {
+              usedperiod = keys.length;
+            }
+            keys.push(key);
           }
       }
 
