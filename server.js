@@ -3,20 +3,9 @@
  */
 var express = require("express");
 var app = express();
-var parser = require("./hashtag_parser");
 var config = require("./config");
-var clean = require("./oldTweetsRemover");
-var async = require("async");
-
-var items = [function (db) {
-    db.collection("unparsed").insert(temp, function (err, result) {
-            if (err) {
-                console.log(err);
-            }
-            temp = [];
-        });
-    },
-    parser, clean];
+var updater = require("./midnightUpdater");
+var cron = require("cron").CronJob;
 
 var mongodb = require('mongodb');
 var mongo;  //для передачи клиенту
@@ -40,10 +29,11 @@ app.use(express.static(__dirname + '/public'));
 
 //отображение начальной страницы
 app.get('/', function(req, res) {
-    var curs = mongo.collection('hashtags').find({}).sort({"hits_1": -1}).limit(15);
+    var sort = JSON.parse('{"value.'+config.mongo.defaultPeriod+'" : -1}');
+    var curs = mongo.collection('hash_stats').find({}).sort(sort).limit(15);
 
     curs.toArray(function (err, result) {
-        res.render('index.jade', {list : result});
+        res.render('index.jade', {list : result, def: config.mongo.defaultPeriod});
     });
 });
 
@@ -72,14 +62,12 @@ app.get('/autocomplete/:text', function(req, res) {
 });
 
 //добавление элементов в таблицу
-app.get('/show/:period/:skip/:min', function(req, res) {
-    var srt = [{hits_0:-1},{hits_1:-1},{hits_2:-1}];
-    var limit = parseInt(req.params.min);
-    var period = req.params.period;
-    var fnd = [{hits_0: {$gte: limit}}, {hits_1: {$gte: limit}}, {hits_2: {$gte: limit}}];
+app.get('/show', function(req, res) {
+    var find = JSON.parse('{"value.'+req.query.period+'":{"$gte":'+req.query.minimun+'}}');
+    var sort = JSON.parse('{"value.'+req.query.period+'" : -1}');
 
-    var curs = mongo.collection('hashtags').find(fnd[period]).sort(
-        srt[period]).limit(15).skip(parseInt(req.params.skip));
+    var curs = mongo.collection('hash_stats').find(find).sort(
+        sort).limit(15).skip(parseInt(req.query.skip));
 
     curs.toArray(function (err, result) {
         if (result.length==0) {
@@ -93,7 +81,7 @@ app.get('/show/:period/:skip/:min', function(req, res) {
 
 //информация о хэштеге
 app.get('/find/:hashtag', function (req,res) {
-    var curs = mongo.collection('hashtags').find({_id : "ObjectId(" + req.params.hashtag + ")"});
+    var curs = mongo.collection('hash_stats').find({_id : req.params.hashtag});
 
     curs.toArray(function (err, result) {
         if (result.length==0) {
@@ -105,8 +93,6 @@ app.get('/find/:hashtag', function (req,res) {
     });
 });
 
-var temp = [];
-
 app.listen(2000);
 
 MongoClient.connect(url, function (err, db) {
@@ -115,43 +101,69 @@ MongoClient.connect(url, function (err, db) {
     } else {
         console.log('Connection established to', url);
         mongo = db;
-        //clean(db,0);
-       // parser(db);
-        setInterval(function () {
-            async.each(items, function (item) {
-                item(db, 0);
-            });
-           /* items.forEach(function (item) {
-                item(db);
-            });*/
-           /* db.collection("unparsed").insert(temp, function (err, result) {
-                if (err) {
-                    console.log(err);
+
+        //обновить поля hits_x в полночь
+        var job = new cron('00 00 00 * * *', function() {
+                updater.newDay(db);
+            },function () {
+                updater.deleteUnused(db);
+            },
+            true,
+            'Europe/Moscow'
+        );
+
+        var map = function () {
+            var value = {};
+            for (var key in config.mongo.periods) {
+                function temp (obj) {
+                    var result = 0;
+                    for (var i = 0; i < config.mongo.periods[key].length; i++) {
+                        if (!isNaN(parseInt(obj['hits_'+config.mongo.periods[key][i]]))) {
+                            result += parseInt(obj['hits_' + config.mongo.periods[key][i]]);
+                        }
+                    }
+                    return result;
                 }
-                temp = [];
-                parser(db);
-            });*/
+                value[key] = temp(this);
+            }
+            emit (this._id.slice(9,-1),value)
+        };
 
+        var reduce = function (key, val) {
+            return val;
+        };
 
-          //  parser(db); //найти хэштеги в свежих твитах
-           // clean(db);  //найти устаревшие твиты и обновить инф. о тегах
-        }, 300000);
-
-       // var collection = db.collection('unparsed');
+        setInterval(function () {
+            db.collection('hashtags').mapReduce(map,reduce,{out : {replace : 'hash_stats'}, scope : {config : config}},function (err, collection) {
+                if (err) console.log(err);
+                console.log("Updated. ")
+            });
+        },900000);
 
         twit.stream('statuses/sample', function(stream) {
             stream.on('data', function (data) {
-                if( (/[а-яА-ЯёЁ]/.test(data.text)) && (/#\S/.test(data.text))) {
-                 /*   collection.insert({date: parseInt(data.timestamp_ms), text: data.text}, function (err, result) {
-                        if (err) {
-                            console.log(err);
-                        }
-                    });*/
-                    temp.push({date: parseInt(data.timestamp_ms), text: data.text});
+                if( (/[а-яА-ЯёЁ]/.test(data.text)) && (/#\S/.test(data.text)) && config.filters.isOK(data.text)) {
+                    var hashs = getHashtags(data.text);
+                    if (hashs.length > 0) {
+                        hashs.forEach( function (hashtag) {
+                          db.collection('hashtags').update({_id: "ObjectId("+hashtag+")"}, {$inc: {"hits_0": 1}}, {upsert:true,safe:true}, function (err, result) {
+                             if (err)  console.log(err);
+                          });
+                        });
+                    }
                 }
             });
-
             stream.on('error', function(error) { throw error; });
         });
     }
 });
+
+function getHashtags (str) {
+    var hashtags = str.match(/#[а-яА-ЯёЁa-zA-Z0-9_]+/g); //найти все хэштеги
+    if (hashtags==null)
+        return [];
+    for (var i = 0;i<hashtags.length;i++) {
+        hashtags[i]=hashtags[i].substr(1).toLocaleLowerCase(); //убрать символы #
+    }
+    return hashtags;
+}

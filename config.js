@@ -13,6 +13,13 @@ config.twitter.access_token_key = '4...I';
 config.twitter.access_token_secret = 'M...y';
 
 config.mongo.url = "mongodb://localhost:27017/twitter";
+config.mongo.storagePeriod = 7;
+config.mongo.periods = {
+    "Неделя"  : [0,1,2,3,4,5,6],
+    "3 дня"   : [0,1,2],
+    "Сегодня" : [0]
+};
+config.mongo.defaultPeriod = "3 дня"; //при открытии сайта
 
 config.filters.rules = ["Урожай собран", "gameinsight"];
 config.filters.isOK = function (str) {

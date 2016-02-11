@@ -12,22 +12,30 @@ html
     link(href="stylesheets/jquery-ui.css", rel="stylesheet")
     script(src='javascripts/jquery-ui.js')
     script.
-      var usedperiod=1;
-      var period = 1;
+      var usedperiod=0;
+      var period = 0;
       var skip=15;
       var min=0;
 
+      var keys = [];
+      function setKeys () {
+          var temp = !{JSON.stringify(list)};
+          for (var key in temp[0]['value']) {
+              keys.push(key);
+          }
+      }
+
+
       //кнопки выбора периода
       function choosePeriod (id) {
-        if ($('#'+id+"day").hasClass("active")==false) {
-          var ids = [1,3,7];
-          ids.forEach(function (elem,i) {
-            if (elem==id) {
-              $('#'+elem+"day").addClass('active');
-              period = i;
+        if ($('#per'+id).hasClass("active")==false) {
+          keys.forEach(function (elem,i) {
+            if (i==id) {
+              $('#per'+id).addClass('active');
+              period = id;
             }
             else {
-              $('#'+elem+"day").removeClass('active');
+              $('#per'+i).removeClass('active');
             }
           });
         }
@@ -51,16 +59,18 @@ html
 
       //вывести информацию в таблицу
       function loadTable() {
-        $.get('http://localhost:2000/show/'+usedperiod+'/'+skip+'/'+min, {}, function(json){
+        $.get('http://localhost:2000/show/', {period:keys[usedperiod],skip:skip,minimun:min}, function(json){
           skip+=json.list.length;
           if (json.list.length<15) {
             $("#load").hide();
           }
           json.list.forEach(function (doc) {
-            $("#tbody").append("<tr><td>" + doc._id.slice(9,-1) +
-                              "</td><td>" + doc.hits_0 +
-                              "</td><td>" + doc.hits_1 +
-                              "</td><td>" + doc.hits_2 + "</td></tr>");
+            var add = "<tr><td>" + doc._id + "</td>";
+            keys.forEach(function (key) {
+              add+="<td>"+doc.value[key]+"</td>";
+            });
+            add+="</tr>";
+            $("#tbody").append(add);
           })
         });
       }
@@ -72,10 +82,14 @@ html
              $("#tbody").empty();
              $("#load").hide();
              if (json.mes != "error") {
-               $("#tbody").append("<tr><td>" + json.mes._id.slice(9,-1) +
-                       "</td><td>" + json.mes.hits_0 +
-                       "</td><td>" + json.mes.hits_1 +
-                       "</td><td>" + json.mes.hits_2 + "</td></tr>");
+               var add = "<tr><td>" + json.mes._id + "</td>";
+               keys.forEach(function (key) {
+                 if (key.toString() != '_id') {
+                   add += "<td>" + json.mes.value[key] + "</td>";
+                 }
+               });
+               add += "</tr>";
+               $("#tbody").append(add);
              }
              else {
                $("#tbody").append("<tr><td>Не найдено</td></tr>");
@@ -85,6 +99,7 @@ html
       }
 
       $(document).ready(function () {
+        setKeys();
         //автокомплит
         $("#autocomplete").autocomplete({
           source: function (request, response) {
@@ -105,9 +120,13 @@ html
           div.form-horizontal
             p Период:
             div(role="group").btn-group
-              button#1day(onclick='choosePeriod(1)').btn.btn-default 1 день
-              button#3day(onclick='choosePeriod(3)').btn.btn-default.active 3 дня
-              button#7day(onclick='choosePeriod(7)').btn.btn-default 7 дней
+                - var keys = [];
+                - for (var key in list[0].value) {
+                  -if (key.toString() == def) {
+                    button(onclick='choosePeriod('+keys.length+')', id='per'+keys.length).btn.btn-default.active=key
+                  -} else {
+                    button(onclick='choosePeriod('+keys.length+')', id='per'+keys.length).btn.btn-default=key
+                - } keys.push(key); }
             input#limit.form-control(placeholder="Минимум упоминаний")
             button(onclick="apply()").btn.btn-default Применить
           p.vertical-center Или
@@ -121,18 +140,18 @@ html
         div.col-md-9
           table.table.table-striped
             thead
-              tr
+              tr#thead
                 th Хэштег
-                th 1 день
-                th 3 дня
-                th 7 дней
+                  - keys.forEach(function (key) {
+                  th=key
+                  -})
             tbody#tbody
               - list.forEach(function (doc) {
                   tr
-                    td=doc._id.slice(9,-1)
-                    td=doc.hits_0
-                    td=doc.hits_1
-                    td=doc.hits_2
+                    td=doc._id
+                    - keys.forEach(function (key) {
+                    td=doc.value[key]
+                    -})
               -});
           div.text-center
             button#load(onclick="loadTable()").btn.btn-default Ещё
