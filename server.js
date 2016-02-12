@@ -43,7 +43,7 @@ app.get('/autocomplete/:text', function(req, res) {
     var dbsize;
     var arr = [],counter=0;
 
-    var curs = mongo.collection('hashtags').find({_id : new RegExp(search)}).sort({"hits_2": -1}).limit(5);
+    var curs = mongo.collection('hashtags').find({_id : new RegExp(search)}).sort({"hits_0": -1}).limit(5);
 
     curs.count(function(error, size) {
         dbsize=size;
