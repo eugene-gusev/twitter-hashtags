@@ -15,7 +15,6 @@
     "serve-favicon": "~2.3.0",
     "twitter":"latest",
     "mongodb":"latest",
-    "async":"latest",
     "cron":"latest"
   }
 }

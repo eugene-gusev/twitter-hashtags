@@ -100,60 +100,64 @@ MongoClient.connect(url, function (err, db) {
         console.log('Unable to connect to the mongoDB server. Error:', err);
     } else {
         console.log('Connection established to', url);
-        mongo = db;
+        db.authenticate(config.mongo.user, config.mongo.pass, function(err, res) {
+            console.log("Authenticated");
 
-        //обновить поля hits_x в полночь
-        var job = new cron('00 00 00 * * *', function() {
-                updater.newDay(db);
-            },function () {
-                updater.deleteUnused(db);
-            },
-            true,
-            'Europe/Moscow'
-        );
+            mongo = db;
 
-        var map = function () {
-            var value = {};
-            for (var key in config.mongo.periods) {
-                function temp (obj) {
-                    var result = 0;
-                    for (var i = 0; i < config.mongo.periods[key].length; i++) {
-                        if (!isNaN(parseInt(obj['hits_'+config.mongo.periods[key][i]]))) {
-                            result += parseInt(obj['hits_' + config.mongo.periods[key][i]]);
+            //обновить поля hits_x в полночь
+            var job = new cron('00 00 00 * * *', function() {
+                    updater.newDay(db);
+                },function () {
+                    updater.deleteUnused(db);
+                },
+                true,
+                'Europe/Moscow'
+            );
+
+            var map = function () {
+                var value = {};
+                for (var key in config.mongo.periods) {
+                    function temp (obj) {
+                        var result = 0;
+                        for (var i = 0; i < config.mongo.periods[key].length; i++) {
+                            if (!isNaN(parseInt(obj['hits_'+config.mongo.periods[key][i]]))) {
+                                result += parseInt(obj['hits_' + config.mongo.periods[key][i]]);
+                            }
+                        }
+                        return result;
+                    }
+                    value[key] = temp(this);
+                }
+                emit (this._id.slice(9,-1),value)
+            };
+
+            var reduce = function (key, val) {
+                return val;
+            };
+
+            setInterval(function () {
+                db.collection('hashtags').mapReduce(map,reduce,{out : {replace : 'hash_stats'}, scope : {config : config}},function (err, collection) {
+                    if (err) console.log(err);
+                    console.log("Updated. ")
+                });
+            },900000);
+
+            twit.stream('statuses/sample', function(stream) {
+                stream.on('data', function (data) {
+                    if( (/[а-яА-ЯёЁ]/.test(data.text)) && (/#\S/.test(data.text)) && config.filters.isOK(data.text)) {
+                        var hashs = getHashtags(data.text);
+                        if (hashs.length > 0) {
+                            hashs.forEach( function (hashtag) {
+                                db.collection('hashtags').update({_id: "ObjectId("+hashtag+")"}, {$inc: {"hits_0": 1}}, {upsert:true,safe:true}, function (err, result) {
+                                    if (err)  console.log(err);
+                                });
+                            });
                         }
                     }
-                    return result;
-                }
-                value[key] = temp(this);
-            }
-            emit (this._id.slice(9,-1),value)
-        };
-
-        var reduce = function (key, val) {
-            return val;
-        };
-
-        setInterval(function () {
-            db.collection('hashtags').mapReduce(map,reduce,{out : {replace : 'hash_stats'}, scope : {config : config}},function (err, collection) {
-                if (err) console.log(err);
-                console.log("Updated. ")
+                });
+                stream.on('error', function(error) { throw error; });
             });
-        },900000);
-
-        twit.stream('statuses/sample', function(stream) {
-            stream.on('data', function (data) {
-                if( (/[а-яА-ЯёЁ]/.test(data.text)) && (/#\S/.test(data.text)) && config.filters.isOK(data.text)) {
-                    var hashs = getHashtags(data.text);
-                    if (hashs.length > 0) {
-                        hashs.forEach( function (hashtag) {
-                          db.collection('hashtags').update({_id: "ObjectId("+hashtag+")"}, {$inc: {"hits_0": 1}}, {upsert:true,safe:true}, function (err, result) {
-                             if (err)  console.log(err);
-                          });
-                        });
-                    }
-                }
-            });
-            stream.on('error', function(error) { throw error; });
         });
     }
 });

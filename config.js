@@ -13,6 +13,8 @@ config.twitter.access_token_key = '4...I';
 config.twitter.access_token_secret = 'M...y';
 
 config.mongo.url = "mongodb://localhost:27017/twitter";
+config.mongo.user="eugene";
+config.mongo.pass="pass";
 config.mongo.storagePeriod = 7;
 config.mongo.periods = {
     "Неделя"  : [0,1,2,3,4,5,6],
